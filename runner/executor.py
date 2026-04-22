@@ -67,6 +67,7 @@ class StepExecutor:
         manifests: Optional[Dict[str, Dict[str, Any]]] = None,
         tool_config: Optional[Dict[str, Dict[str, Any]]] = None,
         proxy_manager: Optional[ProxyManager] = None,
+        proxy_config: Optional[Dict[str, Any]] = None,
     ):
         self.max_retries = max_retries
         self.base_delay = base_delay
@@ -74,7 +75,15 @@ class StepExecutor:
         self.timeout = timeout
         self.manifests = manifests or {}
         self.tool_config = tool_config or {}  # Tool-specific config (e.g., proxy)
-        self.proxy_manager = proxy_manager or ProxyManager()  # Proxy manager for network tools
+        
+        # Initialize proxy manager with config
+        if proxy_manager:
+            self.proxy_manager = proxy_manager
+        elif proxy_config:
+            self.proxy_manager = ProxyManager(proxy_config)
+        else:
+            self.proxy_manager = ProxyManager()  # Default: no proxy
+        
         self._cancelled = False
 
     def cancel(self):

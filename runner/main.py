@@ -114,6 +114,8 @@ class KitRunner:
         # Initialize executor
         runner_config = self.config.get('runner', {})
         tool_config = self.config.get('tools', {})  # Tool-specific config (e.g., proxy)
+        proxy_config = self.config.get('proxy', {})  # Global proxy config
+        
         self.executor = StepExecutor(
             max_retries=runner_config.get('max_retries', 3),
             base_delay=runner_config.get('retry_base_delay', 1.0),
@@ -121,6 +123,7 @@ class KitRunner:
             timeout=runner_config.get('step_timeout', 3600),
             manifests=self.manifests,
             tool_config=tool_config,  # Pass tool-specific config
+            proxy_config=proxy_config,  # Pass proxy config
         )
 
         # Initialize pipeline builder
@@ -449,10 +452,27 @@ def main():
     parser.add_argument('--tools', '-t', action='store_true', help='List available tools')
     parser.add_argument('--debug-job', '-d', help='Collect debug archive for failed job by ID')
     parser.add_argument('--debug-output', help='Output directory for debug archive (default: ~/.kit/logs)')
+    parser.add_argument('--proxy', help='Enable proxy with URL (e.g., socks5://127.0.0.1:10808)')
+    parser.add_argument('--no-proxy', action='store_true', help='Disable proxy for this run')
+    parser.add_argument('--proxy-status', action='store_true', help='Show proxy status and exit')
 
     args = parser.parse_args()
 
+    # Load base config
     runner = KitRunner(config_path=args.config)
+    
+    # Override proxy settings from CLI
+    if args.no_proxy or args.proxy:
+        if 'proxy' not in runner.config:
+            runner.config['proxy'] = {}
+        if args.no_proxy:
+            runner.config['proxy']['enabled'] = False
+            print("Proxy: disabled for this run")
+        elif args.proxy:
+            runner.config['proxy']['enabled'] = True
+            runner.config['proxy']['socks5'] = args.proxy
+            print(f"Proxy: {args.proxy}")
+    
     runner.initialize()
 
     if args.list:
@@ -468,6 +488,27 @@ def main():
         for tool in tools:
             print(f"  {tool['name']}: {tool['description']}")
             print(f"    Modes: {', '.join(tool['modes'])}")
+        return
+
+    if args.proxy_status:
+        from .proxy import create_proxy_manager
+        proxy_mgr = create_proxy_manager(global_config=runner.config)
+        status = proxy_mgr.get_status()
+        print("\nProxy Status:")
+        print(f"  Enabled: {status['enabled']}")
+        print(f"  Configured: {status['configured']}")
+        print(f"  Available: {status['available']}")
+        print(f"  Type: {status['type']}")
+        print(f"  Host: {status['host']}:{status['port'] if status['port'] else 'N/A'}")
+        print(f"  Method: {status['method']}")
+        if status['last_check']:
+            print(f"\nLast check:")
+            print(f"  Target: {status['last_check']['target']}")
+            print(f"  Reachable: {status['last_check']['is_reachable']}")
+            if status['last_check'].get('response_time_ms'):
+                print(f"  Response time: {status['last_check']['response_time_ms']:.1f}ms")
+            if status['last_check'].get('error'):
+                print(f"  Error: {status['last_check']['error']}")
         return
 
     if args.debug_job:

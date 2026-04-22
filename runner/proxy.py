@@ -180,6 +180,31 @@ class ProxyManager:
         self._is_available: Optional[bool] = None
         self._last_check: Optional[ProxyCheckResult] = None
     
+    def update_config(self, enabled: Optional[bool] = None, url: Optional[str] = None):
+        """
+        Update proxy configuration at runtime.
+        
+        Args:
+            enabled: Enable or disable proxy
+            url: New proxy URL
+        """
+        if enabled is not None:
+            self.config.enabled = enabled
+        
+        if url:
+            parsed = ProxyConfig._parse_proxy_url(url)
+            self.config.host = parsed.get("host")
+            self.config.port = parsed.get("port")
+            self.config.username = parsed.get("username")
+            self.config.password = parsed.get("password")
+            if parsed.get("type"):
+                self.config.type = parsed["type"]
+            self.config.url = url
+        
+        # Reset availability cache when config changes
+        self._is_available = None
+        self._last_check = None
+    
     def is_enabled(self) -> bool:
         """Check if proxy is enabled in configuration."""
         return self.config.enabled
@@ -196,10 +221,10 @@ class ProxyManager:
             force: Force re-check even if already checked
             
         Returns:
-            True if proxy is reachable, False otherwise
+            True if proxy is reachable or disabled, False otherwise
         """
         if not self.config.enabled:
-            return True  # Proxy disabled, consider available
+            return True  # Proxy disabled, skip checks
         
         if not self.is_configured():
             return False
@@ -423,7 +448,7 @@ class ProxyManager:
         Get environment variables for proxy injection.
         
         Returns:
-            Dictionary with HTTP_PROXY, HTTPS_PROXY, etc.
+            Dictionary with HTTP_PROXY, HTTPS_PROXY, etc. Empty dict if disabled.
         """
         if not self.config.enabled or not self.is_configured():
             return {}
@@ -432,16 +457,10 @@ class ProxyManager:
         if not proxy_url:
             return {}
         
-        # Add auth if present
-        if self.config.username and self.config.password:
-            # URL already has auth from to_url()
-            pass
-        
         return {
             "HTTP_PROXY": proxy_url,
             "HTTPS_PROXY": proxy_url,
             "ALL_PROXY": proxy_url,
-            # For tools that use lowercase
             "http_proxy": proxy_url,
             "https_proxy": proxy_url,
             "all_proxy": proxy_url,
@@ -455,7 +474,7 @@ class ProxyManager:
             param_format: Format string for proxy parameter
             
         Returns:
-            Formatted parameter string or None
+            Formatted parameter string or None if disabled
         """
         if not self.config.enabled or not self.is_configured():
             return None
