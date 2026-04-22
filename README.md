@@ -99,11 +99,81 @@ python -m runner.main --debug-job <job_id>
 
 | Инструмент | Режимы | Описание |
 |------------|--------|----------|
-| **yt-dlp** | `download`, `subtitles` | Скачивание видео/аудио, субтитров |
+| **yt-dlp** | `download`, `audio_only`, `subtitles`, `probe`, `playlist` | Скачивание видео/аудио, субтитров |
 | **whisper** | `transcribe` | Транскрибация аудио в текст |
 | **ffmpeg** | `convert`, `extract_audio` | Конвертация и обработка медиа |
 
 Манифесты находятся в папке `manifests/` и описывают команды, входы/выходы и правила валидации для каждого режима.
+
+---
+
+## yt-dlp: скачивание видео и аудио
+
+### Базовое использование
+
+```bash
+# Скачать видео (лучшее качество, формат выбирается автоматически)
+python -m runner.main --goal "Скачать видео с YouTube" \
+    --input "url=https://youtu.be/VIDEO_ID" --no-proxy
+
+# Скачать аудио (конвертация в MP3)
+python -m runner.main --goal "Скачать аудио с YouTube" \
+    --input "url=https://youtu.be/VIDEO_ID" --no-proxy
+```
+
+### Выбор формата
+
+Формат указывается через параметр `format`. Если не указан — yt-dlp выбирает лучшее качество автоматически.
+
+```bash
+# Скачать в 720p
+python -m runner.main --goal "Скачать видео" \
+    --input "url=https://youtu.be/VIDEO_ID" \
+    --input "format=best[height<=720]" --no-proxy
+
+# Скачать в 1080p
+python -m runner.main --goal "Скачать видео" \
+    --input "url=https://youtu.be/VIDEO_ID" \
+    --input "format=best[height<=1080]" --no-proxy
+
+# Только MP4 форматы
+python -m runner.main --goal "Скачать видео" \
+    --input "url=https://youtu.be/VIDEO_ID" \
+    --input "format=best[ext=mp4]" --no-proxy
+
+# Наименьшее качество (для экономии места)
+python -m runner.main --goal "Скачать видео" \
+    --input "url=https://youtu.be/VIDEO_ID" \
+    --input "format=worst" --no-proxy
+```
+
+### Популярные форматы yt-dlp
+
+| Формат | Описание |
+|--------|----------|
+| `bestvideo+bestaudio/best` | Лучшее качество (по умолчанию) |
+| `best[height<=1080]` | Лучшее до 1080p |
+| `best[height<=720]` | Лучшее до 720p |
+| `best[ext=mp4]` | Лучшее в MP4 |
+| `worst` | Наименьшее качество |
+| `bestvideo` | Только видео (без аудио) |
+| `bestaudio` | Только аудио (лучшее) |
+
+### Выходные файлы
+
+Файлы сохраняются в папке `outputs/` проекта:
+
+```
+project/
+├── outputs/
+│   ├── step-1/
+│   │   └── Название_видео.mp4    # или .mp3 для audio_only
+│   └── step-2/
+│       └── ...
+└── ...
+```
+
+Расширение файла определяется автоматически в зависимости от формата.
 
 ---
 
@@ -239,14 +309,28 @@ media_bot/
 
 ## Примеры пайплайнов
 
+### Скачать видео с YouTube
+
+```bash
+# Лучшее качество (автоматический выбор формата)
+python -m runner.main --goal "Скачать видео с YouTube" \
+    --input "url=https://youtu.be/VIDEO_ID" --no-proxy
+
+# Конкретный формат (720p)
+python -m runner.main --goal "Скачать видео" \
+    --input "url=https://youtu.be/VIDEO_ID" \
+    --input "format=best[height<=720]" --no-proxy
+```
+
 ### Скачать аудио с YouTube
 
 ```bash
 python -m runner.main \
     --goal "Скачать аудио с YouTube" \
-    --input "url=https://www.youtube.com/watch?v=dQw4w9WgXcQ" \
-    --input "format=mp3"
+    --input "url=https://www.youtube.com/watch?v=dQw4w9WgXcQ" --no-proxy
 ```
+
+Файл сохраняется в `outputs/step-1/` проекта.
 
 ### Транскрибировать видео
 

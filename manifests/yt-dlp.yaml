@@ -21,8 +21,8 @@ inputs:
   format:
     type: string
     required: false
-    default: "bestvideo+bestaudio/best"
-    description: Format selection string
+    default: ""
+    description: Format selection string (empty = yt-dlp default)
   
   output_template:
     type: string
@@ -69,7 +69,7 @@ outputs:
 modes:
   download:
     description: Download video with audio
-    command: "yt-dlp --proxy '{proxy}' -o '{out.output_file}' '{url}'"
+    command: "yt-dlp --proxy '{proxy}' -f '{format}' --merge-output-format mp4 -o '{out.output_file}' '{url}'"
     output:
       output_file:
         path: "{project_dir}/outputs/{step_id}/%(title)s.%(ext)s"

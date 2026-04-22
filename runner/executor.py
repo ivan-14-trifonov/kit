@@ -266,6 +266,18 @@ class StepExecutor:
             cmd_str = re.sub(r"\s*--proxy\s+'\{proxy\}'", ' ', cmd_str, flags=re.IGNORECASE)
             cmd_str = re.sub(r'\s*--proxy\s+"\{proxy\}"', ' ', cmd_str, flags=re.IGNORECASE)
         
+        # Remove -f '' or -f "{format}" when format is empty/not specified
+        # This allows default yt-dlp behavior when no format is provided
+        cmd_str = re.sub(r'\s+-f\s+\'\'', ' ', cmd_str)  # Remove -f ''
+        cmd_str = re.sub(r'\s+-f\s+""', ' ', cmd_str)  # Remove -f ""
+        cmd_str = re.sub(r'\s+-f\s+\{format\}', ' ', cmd_str, flags=re.IGNORECASE)  # Remove -f {format}
+        
+        # Also remove --merge-output-format when format is not specified (cleanup)
+        # This ensures default yt-dlp behavior when no format is provided
+        if re.search(r'\s+-f\s+', cmd_str) is None:
+            # No -f flag in command, remove --merge-output-format too
+            cmd_str = re.sub(r'\s+--merge-output-format\s+\w+', ' ', cmd_str)
+        
         # Remove optional parameters with empty values (e.g., --param '')
         # This handles cases where other params are empty
         cmd_str = re.sub(r'\s*--\w+\s+\'\'', ' ', cmd_str)  # Remove --param ''
