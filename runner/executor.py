@@ -201,6 +201,9 @@ class StepExecutor:
         # Add tool-specific config (e.g., proxy)
         tool_cfg = self.tool_config.get(step.tool, {})
         for key, value in tool_cfg.items():
+            # Skip proxy if it's disabled globally
+            if key == 'proxy' and not self.proxy_manager.is_enabled():
+                continue
             if key not in params:  # Don't override step-specific params
                 params[key] = value
 
@@ -247,12 +250,21 @@ class StepExecutor:
                 out_name = key[6:]
                 cmd_str = cmd_str.replace(f'{{out.{out_name}}}', value)
 
+        # Remove optional parameters with empty values (e.g., --proxy '')
+        # This handles cases where proxy is disabled but template includes --proxy '{proxy}'
+        import re
+        cmd_str = re.sub(r'\s+--\w+ \'\'', '', cmd_str)  # Remove --param ''
+        cmd_str = re.sub(r'\s+--\w+ ""', '', cmd_str)  # Remove --param ""
+        
+        # Clean up multiple spaces
+        cmd_str = re.sub(r'\s+', ' ', cmd_str).strip()
+
         # Parse command
         try:
             return shlex.split(cmd_str)
         except ValueError as e:
             return None
-
+        
     def _execute_command(
         self,
         cmd: List[str],
