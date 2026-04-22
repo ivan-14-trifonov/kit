@@ -253,8 +253,9 @@ class StepExecutor:
         # Remove optional parameters with empty values (e.g., --proxy '')
         # This handles cases where proxy is disabled but template includes --proxy '{proxy}'
         import re
-        cmd_str = re.sub(r'\s+--\w+ \'\'', '', cmd_str)  # Remove --param ''
-        cmd_str = re.sub(r'\s+--\w+ ""', '', cmd_str)  # Remove --param ""
+        # Remove --param '' or --param "" (handles start/middle/end of command)
+        cmd_str = re.sub(r'\s*--\w+\s+\'\'', ' ', cmd_str)  # Remove --param ''
+        cmd_str = re.sub(r'\s*--\w+\s+""', ' ', cmd_str)  # Remove --param ""
         
         # Clean up multiple spaces
         cmd_str = re.sub(r'\s+', ' ', cmd_str).strip()

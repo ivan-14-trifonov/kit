@@ -107,8 +107,8 @@ class PipelineBuilder:
         # Build LLM prompt
         prompt = self._build_prompt(goal, input_data, expected_output, shortcut_result)
         
-        # Call LLM
-        llm_response = self._call_llm(prompt)
+        # Call LLM (pass goal for fallback)
+        llm_response = self._call_llm(prompt, goal)
         
         # Parse response
         steps, manifest_refs, confidence = self._parse_llm_response(llm_response)
@@ -150,14 +150,18 @@ class PipelineBuilder:
                     'alternative': 'yt-dlp with --write-subs option',
                 }
         
-        # Check for audio-only requests
-        if 'audio' in goal_lower and 'video' not in goal_lower:
+        # Check for audio-only requests (English and Russian)
+        audio_keywords = ['audio', 'аудио', 'мп3', 'mp3', 'звуковая дорожка']
+        has_audio = any(kw in goal_lower for kw in audio_keywords)
+        has_video = 'video' in goal_lower or 'видео' in goal_lower
+        
+        if has_audio and not has_video:
             return {
                 'detected': True,
                 'apply': True,
                 'reason': 'Audio-only requested, skip video processing',
-                'skip_modes': ['video'],
-                'prefer_modes': ['audio'],
+                'skip_modes': ['video', 'download', 'subtitles', 'playlist'],
+                'prefer_modes': ['audio_only'],
             }
         
         return None
@@ -248,11 +252,11 @@ Only respond with the JSON object, no other text.
 
         return prompt
 
-    def _call_llm(self, prompt: str) -> str:
+    def _call_llm(self, prompt: str, goal: str = None) -> str:
         """Call LLM using LiteLLM"""
         if not LITELLM_AVAILABLE:
             # Fallback to simple rule-based pipeline
-            return self._fallback_pipeline(prompt)
+            return self._fallback_pipeline(goal or prompt)
 
         # Get API key from direct value or environment
         api_key = self.api_key_value or os.environ.get(self.api_key_env)
@@ -276,7 +280,7 @@ Only respond with the JSON object, no other text.
             return response.choices[0].message.content
         except Exception as e:
             print(f"LLM call failed: {e}, using fallback")
-            return self._fallback_pipeline(prompt)
+            return self._fallback_pipeline(goal or prompt)
 
     def _fallback_pipeline(self, prompt: str) -> str:
         """Fallback rule-based pipeline generation"""
@@ -286,33 +290,47 @@ Only respond with the JSON object, no other text.
         steps = []
         manifest_refs = []
         
-        if 'youtube' in prompt_lower or 'download' in prompt_lower:
+        # Check for audio-only requests first (English and Russian)
+        audio_keywords = ['audio', 'аудио', 'мп3', 'mp3', 'музыку', 'скачать музыку']
+        has_audio = any(kw in prompt_lower for kw in audio_keywords)
+        has_video = 'video' in prompt_lower or 'видео' in prompt_lower
+        is_audio_only = has_audio and not has_video
+        
+        if 'youtube' in prompt_lower or 'download' in prompt_lower or 'скачать' in prompt_lower:
+            # Use audio_only mode for audio requests, download for video
+            mode = 'audio_only' if is_audio_only else 'download'
+            if is_audio_only:
+                description = 'Скачать аудио с YouTube' if 'скачать' in prompt_lower else 'Extract audio from YouTube'
+            else:
+                description = 'Скачать видео с YouTube' if 'скачать' in prompt_lower else 'Download video from URL'
             steps.append({
                 'tool': 'yt-dlp',
-                'mode': 'download',
+                'mode': mode,
                 'input_params': {'url': '$input.url'},
-                'description': 'Download video from URL'
+                'description': description
             })
             manifest_refs.append('yt-dlp')
         
-        if 'transcribe' in prompt_lower or 'subtitle' in prompt_lower:
-            if 'youtube' in prompt_lower:
-                # Try to get subs from yt-dlp first
-                steps.append({
-                    'tool': 'yt-dlp',
-                    'mode': 'subtitles',
-                    'input_params': {'url': '$input.url'},
-                    'description': 'Extract subtitles from video'
-                })
-                manifest_refs.append('yt-dlp')
-            else:
-                steps.append({
-                    'tool': 'whisper',
-                    'mode': 'transcribe',
-                    'input_params': {'audio_file': '$prev.output_file'},
-                    'description': 'Transcribe audio to text'
-                })
-                manifest_refs.append('whisper')
+        # Add subtitle/transcribe steps only if not audio-only request
+        if not is_audio_only:
+            if 'transcribe' in prompt_lower or 'subtitle' in prompt_lower or 'субтитр' in prompt_lower:
+                if 'youtube' in prompt_lower:
+                    # Try to get subs from yt-dlp first
+                    steps.append({
+                        'tool': 'yt-dlp',
+                        'mode': 'subtitles',
+                        'input_params': {'url': '$input.url'},
+                        'description': 'Extract subtitles from video'
+                    })
+                    manifest_refs.append('yt-dlp')
+                else:
+                    steps.append({
+                        'tool': 'whisper',
+                        'mode': 'transcribe',
+                        'input_params': {'audio_file': '$prev.output_file'},
+                        'description': 'Transcribe audio to text'
+                    })
+                    manifest_refs.append('whisper')
         
         if 'convert' in prompt_lower or 'format' in prompt_lower:
             steps.append({
@@ -380,11 +398,34 @@ Only respond with the JSON object, no other text.
     ) -> List[PipelineStep]:
         """Apply shortcut to skip unnecessary steps"""
         skip_tools = shortcut_result.get('skip_tools', [])
+        skip_modes = shortcut_result.get('skip_modes', [])
+        prefer_modes = shortcut_result.get('prefer_modes', [])
         
-        filtered_steps = [
-            step for step in steps
-            if step.tool not in skip_tools
-        ]
+        filtered_steps = []
+        for step in steps:
+            # Skip tools
+            if step.tool in skip_tools:
+                continue
+            
+            # Skip modes
+            if step.mode in skip_modes:
+                continue
+            
+            # Prefer certain modes (e.g., audio_only instead of download)
+            if prefer_modes and step.tool == 'yt-dlp':
+                for prefer_mode in prefer_modes:
+                    # Handle both 'audio' and 'audio_only' preferences
+                    if prefer_mode in ('audio', 'audio_only') and step.mode == 'download':
+                        # Change mode to audio_only
+                        step = PipelineStep(
+                            tool=step.tool,
+                            mode='audio_only',
+                            input_params=step.input_params,
+                            description='Extract audio from YouTube'
+                        )
+                        break
+            
+            filtered_steps.append(step)
         
         return filtered_steps
 
