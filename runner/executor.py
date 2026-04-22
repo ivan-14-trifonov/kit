@@ -90,6 +90,7 @@ class StepExecutor:
         step: StepCard,
         job_dir: Path,
         previous_outputs: Optional[Dict[str, Any]] = None,
+        input_data: Optional[Dict[str, Any]] = None,
     ) -> ExecutionResult:
         """
         Execute a single step with retry logic.
@@ -98,12 +99,14 @@ class StepExecutor:
             step: StepCard with step configuration
             job_dir: Directory for job output files
             previous_outputs: Outputs from previous steps for chaining
+            input_data: Original job input data for $input.* references
         
         Returns:
             ExecutionResult with execution details
         """
         self._cancelled = False
         previous_outputs = previous_outputs or {}
+        input_data = input_data or {}
 
         # Get tool manifest
         manifest = self.manifests.get(step.tool, {})
@@ -116,7 +119,7 @@ class StepExecutor:
             mode_config = {**mode_config, 'known_warnings': known_warnings}
 
         # Build command
-        cmd = self._build_command(step, mode_config, previous_outputs, job_dir)
+        cmd = self._build_command(step, mode_config, previous_outputs, job_dir, input_data)
         if not cmd:
             return ExecutionResult(
                 status=ExecutionStatus.FAILED,
@@ -176,6 +179,7 @@ class StepExecutor:
         mode_config: Dict[str, Any],
         previous_outputs: Dict[str, Any],
         job_dir: Path,
+        input_data: Optional[Dict[str, Any]] = None,
     ) -> Optional[List[str]]:
         """Build command from step configuration"""
         template = mode_config.get('command', '')
@@ -196,7 +200,14 @@ class StepExecutor:
             if key not in params:
                 params[key] = value
 
-        # Resolve file paths
+        # Resolve $input.* references (from job input_data)
+        input_data = input_data or {}
+        for key, value in params.items():
+            if isinstance(value, str) and value.startswith('$input.'):
+                input_key = value[7:]  # Remove '$input.' prefix
+                params[key] = input_data.get(input_key, value)
+        
+        # Resolve $prev.* references (from previous step outputs)
         for key, value in params.items():
             if isinstance(value, str) and value.startswith('$prev.'):
                 prev_key = value[6:]  # Remove '$prev.' prefix

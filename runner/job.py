@@ -7,7 +7,7 @@ import sqlite3
 import json
 import uuid
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from dataclasses import dataclass, field, asdict
 from typing import Optional, List, Dict, Any
 from enum import Enum
@@ -74,8 +74,8 @@ class JobCard:
     expected_output: List[str]
     status: JobStatus = JobStatus.PENDING
     steps: List[StepCard] = field(default_factory=list)
-    created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
-    updated_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     completed_at: Optional[str] = None
     error_message: Optional[str] = None
     pipeline_config: Dict[str, Any] = field(default_factory=dict)
@@ -155,7 +155,7 @@ class JobStorage:
 
     def save_job(self, job: JobCard) -> None:
         """Save or update a job card"""
-        job.updated_at = datetime.utcnow().isoformat()
+        job.updated_at = datetime.now(timezone.utc).isoformat()
         with sqlite3.connect(self.db_path) as conn:
             conn.execute('''
                 INSERT OR REPLACE INTO jobs 

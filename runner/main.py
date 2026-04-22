@@ -9,7 +9,7 @@ import time
 import signal
 import argparse
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 
 import yaml
@@ -264,12 +264,17 @@ class KitRunner:
 
             # Execute step
             step.status = StepStatus.RUNNING
-            step.started_at = datetime.utcnow().isoformat()
+            step.started_at = datetime.now(timezone.utc).isoformat()
             self.storage.save_job(job)
 
-            result = self.executor.execute_step(step, job_dir, previous_outputs)
+            result = self.executor.execute_step(
+                step, 
+                job_dir, 
+                previous_outputs,
+                job.input_data,  # Pass input_data for $input.* references
+            )
 
-            step.completed_at = datetime.utcnow().isoformat()
+            step.completed_at = datetime.now(timezone.utc).isoformat()
             step.duration_seconds = result.duration_seconds
 
             if result.status == ExecutionStatus.SUCCESS:
@@ -324,11 +329,11 @@ class KitRunner:
             all_completed = all(s.status == StepStatus.COMPLETED for s in job.steps)
             if all_completed:
                 job.status = JobStatus.COMPLETED
-                job.completed_at = datetime.utcnow().isoformat()
+                job.completed_at = datetime.now(timezone.utc).isoformat()
                 print(f"\n[OK] Job completed successfully!")
             else:
                 job.status = JobStatus.FAILED
-                job.completed_at = datetime.utcnow().isoformat()
+                job.completed_at = datetime.now(timezone.utc).isoformat()
 
         self.storage.save_job(job)
         self._running_job = None
