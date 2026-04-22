@@ -264,6 +264,51 @@ def test_create_debug_collector_function():
     return True
 
 
+def test_executor_no_proxy_removal():
+    """Test that --proxy is removed from command when proxy is disabled."""
+    from runner.executor import StepExecutor
+    from runner.job import StepCard
+    from runner.proxy import ProxyManager
+    
+    # Create executor with disabled proxy
+    pm = ProxyManager({"enabled": False})
+    executor = StepExecutor(proxy_manager=pm)
+    
+    # Create a step with yt-dlp manifest
+    step = StepCard(
+        step_id="step-1",
+        step_name="Download audio",
+        tool="yt-dlp",
+        mode="audio_only",
+        input_params={"url": "https://youtu.be/test"}
+    )
+    
+    # Mode config with --proxy in template
+    mode_config = {
+        "command": "yt-dlp --proxy '{proxy}' -x --audio-format mp3 -o '{out.output_file}' '{url}'",
+        "output": {
+            "output_file": {"path": "{job_dir}/{step_id}/audio.mp3"}
+        }
+    }
+    
+    from pathlib import Path
+    import tempfile
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        job_dir = Path(tmpdir)
+        cmd = executor._build_command(step, mode_config, {}, job_dir, {"url": "https://youtu.be/test"})
+        
+        assert cmd is not None
+        cmd_str = " ".join(cmd)
+        
+        # Proxy should be removed when disabled
+        assert "--proxy" not in cmd_str
+        assert "yt-dlp -x --audio-format mp3" in cmd_str
+    
+    print("[PASS] Executor --proxy removal when disabled")
+    return True
+
+
 def run_all_tests():
     """Run all core_infra tests."""
     print("=" * 60)
@@ -285,6 +330,7 @@ def run_all_tests():
         ("DebugArchive creation", test_debug_archive_creation),
         ("create_proxy_manager", test_create_proxy_manager_function),
         ("create_debug_collector", test_create_debug_collector_function),
+        ("Executor no-proxy removal", test_executor_no_proxy_removal),
     ]
     
     passed = 0

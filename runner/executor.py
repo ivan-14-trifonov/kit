@@ -250,10 +250,20 @@ class StepExecutor:
                 out_name = key[6:]
                 cmd_str = cmd_str.replace(f'{{out.{out_name}}}', value)
 
-        # Remove optional parameters with empty values (e.g., --proxy '')
-        # This handles cases where proxy is disabled but template includes --proxy '{proxy}'
+        # Handle disabled proxy: remove --proxy parameter from command
+        # This is needed when template includes --proxy '{proxy}' but proxy is disabled
         import re
-        # Remove --param '' or --param "" (handles start/middle/end of command)
+        if not self.proxy_manager.is_enabled():
+            # Remove --proxy '' or --proxy "" or --proxy {proxy} (unsubstituted)
+            cmd_str = re.sub(r'\s*--proxy\s+\'\'', ' ', cmd_str)
+            cmd_str = re.sub(r'\s*--proxy\s+""', ' ', cmd_str)
+            cmd_str = re.sub(r'\s*--proxy\s+\{proxy\}', ' ', cmd_str, flags=re.IGNORECASE)
+            # Also handle case where {proxy} is in quotes
+            cmd_str = re.sub(r"\s*--proxy\s+'\{proxy\}'", ' ', cmd_str, flags=re.IGNORECASE)
+            cmd_str = re.sub(r'\s*--proxy\s+"\{proxy\}"', ' ', cmd_str, flags=re.IGNORECASE)
+        
+        # Remove optional parameters with empty values (e.g., --param '')
+        # This handles cases where other params are empty
         cmd_str = re.sub(r'\s*--\w+\s+\'\'', ' ', cmd_str)  # Remove --param ''
         cmd_str = re.sub(r'\s*--\w+\s+""', ' ', cmd_str)  # Remove --param ""
         
