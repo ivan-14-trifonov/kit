@@ -265,7 +265,7 @@ Only respond with the JSON object, no other text.
                 "temperature": self.temperature,
                 "max_tokens": self.max_tokens,
                 "api_key": api_key,
-                "timeout": 30,  # 30 second timeout
+                "timeout": 1,  # 1 second timeout
             }
             
             # Add custom API base if provided
