@@ -1,0 +1,272 @@
+# Kit Runner
+
+Универсальный запускатор инструментов с автоматическим построением пайплайнов из описания цели на естественном языке.
+
+## Возможности
+
+- **Пайплайны из нескольких инструментов** — опишите цель словами, и система сама построит последовательность шагов (yt-dlp → whisper → ffmpeg и т.д.)
+- **LLM-планирование** — LiteLLM подбирает инструменты и параметры; при недоступности LLM работает rule-based фоллбэк
+- **Resumable jobs** — прерванную задачу можно продолжить с места остановки
+- **Автоматическая установка зависимостей** — команда `install` ставит недостающие инструменты через winget / pip / pipx
+- **Прокси-поддержка** — SOCKS5 / HTTP прокси для сетевых инструментов
+- **Debug-архивы** — сбор логов и артефактов упавшей задачи одной командой
+
+---
+
+## Быстрый старт
+
+### 1. Установка зависимостей
+
+```bash
+# Python-зависимости
+pip install pyyaml litellm
+
+# Системные инструменты (нужны для пайплайнов)
+# macOS
+brew install yt-dlp ffmpeg openai-whisper
+
+# Linux (Debian/Ubuntu)
+sudo apt install yt-dlp ffmpeg
+pip install openai-whisper
+
+# Windows (через winget)
+winget install yt-dlp.yt-dlp Gyan.FFmpeg
+pip install openai-whisper
+```
+
+### 2. Конфигурация
+
+Отредактируйте `config.yaml`:
+
+```yaml
+llm:
+  provider: openai
+  model: qwen3-max
+  api_base: "http://192.168.1.2:3264/v1"   # ваш LLM-эндпоинт
+  api_key: "dummy"                          # или задайте через OPENAI_API_KEY
+```
+
+Если LLM недоступен — система автоматически использует rule-based фоллбэк.
+
+---
+
+## Запуск
+
+### CLI: Kit Runner
+
+```bash
+# Запуск по цели (goal)
+python -m runner.main --goal "Скачать аудио с YouTube" \
+    --input "url=https://www.youtube.com/watch?v=VIDEO_ID"
+
+# Пошаговое выполнение с подтверждением
+python -m runner.main --goal "Транскрибировать видео" \
+    --input "url=https://www.youtube.com/watch?v=VIDEO_ID" \
+    --step-by-step
+
+# Список доступных инструментов
+python -m runner.main --tools
+
+# Список последних задач
+python -m runner.main --list
+
+# Возобновление прерванной задачи
+python -m runner.main --resume <job_id>
+
+# Debug упавшей задачи
+python -m runner.main --debug-job <job_id>
+```
+
+#### Основные флаги
+
+| Флаг | Описание |
+|------|----------|
+| `--goal`, `-g` | Цель на естественном языке |
+| `--input`, `-i` | Входной параметр `key=value` (можно несколько) |
+| `--step-by-step`, `-s` | Подтверждение каждого шага |
+| `--resume`, `-r` | ID задачи для возобновления |
+| `--list`, `-l` | Показать последние задачи |
+| `--tools`, `-t` | Показать доступные инструменты |
+| `--debug-job`, `-d` | Собрать debug-архив по ID задачи |
+| `--config`, `-c` | Путь к config.yaml (по умолчанию `./config.yaml`) |
+
+---
+
+## Доступные инструменты
+
+| Инструмент | Режимы | Описание |
+|------------|--------|----------|
+| **yt-dlp** | `download`, `subtitles` | Скачивание видео/аудио, субтитров |
+| **whisper** | `transcribe` | Транскрибация аудио в текст |
+| **ffmpeg** | `convert`, `extract_audio` | Конвертация и обработка медиа |
+
+Манифесты находятся в папке `manifests/` и описывают команды, входы/выходы и правила валидации для каждого режима.
+
+---
+
+## Структура проекта
+
+```
+media_bot/
+├── config.yaml              # Основная конфигурация
+├── runner/                  # Ядро Kit Runner
+│   ├── main.py              # CLI entry point
+│   ├── executor.py          # Исполнитель шагов с retry
+│   ├── pipeline.py          # LLM-планировщик пайплайнов
+│   ├── installer.py         # Автоустановка инструментов
+│   ├── job.py               # Модель задач и шагов
+│   ├── validator.py         # Валидация результатов
+│   ├── proxy.py             # Управление прокси
+│   └── debug.py             # Сбор debug-архивов
+├── manifests/               # Манифесты инструментов
+│   ├── yt-dlp.yaml
+│   ├── whisper.yaml
+│   ├── ffmpeg.yaml
+│   └── winget.yaml
+├── youtube_audio.py         # Пользовательские сценарии
+├── storage/                 # Хранилище задач и результатов
+└── ui/                      # Веб-интерфейс (в разработке)
+```
+Пакетный модуль (__init__.py) экспортирует все публичные классы и функции из подмодулей, включая JobCard, StepExecutor, PipelineBuilder, KitRunner, ToolInstaller и DebugCollector.
+
+Модуль job.py содержит модели данных и хранилище. В нём определяются JobCard (задача), StepCard (шаг), перечисления статусов, а также JobStorage — SQLite-хранилище для сохранения job-карточек и выходных данных.
+
+Модуль executor.py отвечает за исполнитель шагов. Он запускает команды через subprocess, поддерживает повторные попытки (retry) с экспоненциальной задержкой, инжектирует прокси, выполняет парсинг stdout/stderr и валидацию выходных данных.
+
+Модуль validator.py реализует валидатор выходных данных. Он проверяет файлы и параметры по схеме манифеста: типы данных, диапазоны значений, перечисления (enum), расширения файлов, а также выполняет probing медиафайлов через ffprobe.
+
+Модуль pipeline_builder.py предоставляет построитель pipeline из естественного языка. Используя LiteLLM, он генерирует последовательность шагов по описанию цели. Поддерживается shortcut-детекция — например, фраза «установи ffmpeg» автоматически преобразуется в готовый шаблон.
+
+Модуль installer.py представляет собой универсальный установщик инструментов. Он пробует методы установки по приоритету: сначала winget, затем pip/pipx, и наконец загрузка с GitHub releases. Содержит конфигурацию известных инструментов, таких как ffmpeg и yt-dlp.
+
+Модуль debug_collector.py занимается сбором диагностической информации. При возникновении сбоя он создаёт ZIP-архив с job-карточкой, логами шагов, манифестами и системной информацией. Все чувствительные данные автоматически санитизируются (очищаются).
+
+Наконец, модуль main.py является точкой входа в приложение. В нём определён класс KitRunner — оркестратор, который инициализирует хранилище, загрузку манифестов, executor и pipeline builder, а затем запускает pipeline на основе указанной цели.
+
+---
+
+## Входные данные в Kit Runner
+
+  1. CLI (командная строка) — runner/main.py
+
+   1 # main.py, функция main()
+   2 parser.add_argument('--goal', '-g', help='Natural language goal to execute')
+   3 parser.add_argument('--input', '-i', action='append', help='Input parameter (key=value)')
+
+  Формат: пары key=value через аргумент --input:
+
+   1 python -m runner.main --goal "Download video and extract audio" \
+   2   --input "url=https://youtube.com/watch?v=abc123" \
+   3   --input "format=mp3"
+
+  Парсинг (строки → dict):
+
+   1 # main.py, ~строка 340
+   2 input_data = {}
+   3 if args.input:
+   4     for param in args.input:
+   5         if '=' in param:
+   6             key, value = param.split('=', 1)
+   7             input_data[key] = value
+
+  Результат — Dict[str, str], например:
+
+   1 {"url": "https://youtube.com/watch?v=abc123", "format": "mp3"}
+
+  ---
+
+  2. Программный вызов — KitRunner.run_goal()
+
+   1 # main.py, метод run_goal()
+   2 def run_goal(
+   3     self,
+   4     goal: str,
+   5     input_data: Dict[str, Any],   # ← входные данные
+   6     expected_output: Optional[List[str]] = None,
+   7     step_by_step: bool = False,
+   8 ) -> JobCard:
+
+  Формат: Dict[str, Any] — любой сериализуемый тип:
+
+   1 runner.run_goal(
+   2     goal="Download and transcribe",
+   3     input_data={
+   4         "url": "https://youtube.com/watch?v=xyz",
+   5         "lang": "ru",
+   6         "write_subs": True,
+   7     }
+   8 )
+
+  ---
+
+  3. Как данные проходят через pipeline
+```
+    1 input_data (Dict[str, Any])
+    2     │
+    3     ▼
+    4 PipelineBuilder.build_pipeline(goal, input_data)  ← LLM читает данные при планировании
+    5     │
+    6     ▼
+    7 JobCard.input_data  ← сохраняется в job
+    8     │
+    9     ▼
+   10 StepCard.input_params  ← каждый шаг получает свои параметры
+   11     │
+   12     ▼
+   13 StepExecutor._build_command()  ← подставляет в шаблон команды
+   14     │
+   15     ▼
+   16 subprocess.Popen(cmd)  ← реальный запуск
+```
+  ---
+
+  4. Ссылки на входные данные в шагах
+
+  Шаги могут ссылаться на входные данные через $input.<key>:
+
+   1 # pipeline.py, fallback-генерация
+   2 {'url': '$input.url'}  ← будет заменено на реальное значение из input_data
+
+  А также на выходы предыдущих шагов через $prev.<key>:
+
+   1 {'audio_file': '$prev.output_file'}  ← цепочка между шагами
+
+
+---
+
+## Примеры пайплайнов
+
+### Скачать аудио с YouTube
+
+```bash
+python -m runner.main \
+    --goal "Скачать аудио с YouTube" \
+    --input "url=https://www.youtube.com/watch?v=dQw4w9WgXcQ" \
+    --input "format=mp3"
+```
+
+### Транскрибировать видео
+
+```bash
+python -m runner.main \
+    --goal "Транскрибировать видео на русский" \
+    --input "url=https://www.youtube.com/watch?v=VIDEO_ID" \
+    --input "language=ru"
+```
+
+Система автоматически построит пайплайн: `yt-dlp (download) → whisper (transcribe)`.
+
+---
+
+## Хранение данных
+
+По умолчанию все данные хранятся в `~/.kit/`:
+
+```
+~/.kit/
+├── jobs.db          # База задач
+├── outputs/         # Результаты выполнения
+└── logs/            # Debug-архивы
+```
+
+Пути можно изменить в `config.yaml` в секции `storage`.
