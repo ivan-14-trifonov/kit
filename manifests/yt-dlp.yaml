@@ -72,7 +72,7 @@ modes:
     command: "yt-dlp --proxy '{proxy}' -f '{format}' -o '{out.output_file}' '{url}'"
     output:
       output_file:
-        path: "{job_dir}/{step_id}/%(title)s.mp4"
+        path: "{project_dir}/outputs/{step_id}/%(title)s.mp4"
         file: true
     success_codes: [0]
     timeout: 3600
@@ -83,7 +83,7 @@ modes:
     command: "yt-dlp --proxy '{proxy}' -x --audio-format mp3 -o '{out.output_file}' '{url}'"
     output:
       output_file:
-        path: "{job_dir}/{step_id}/%(title)s.mp3"
+        path: "{project_dir}/outputs/{step_id}/%(title)s.mp3"
         file: true
     success_codes: [0]
     timeout: 3600
@@ -93,10 +93,10 @@ modes:
     command: "yt-dlp --proxy '{proxy}' --write-subs --sub-lang '{lang}' --skip-download -o '{out.output_file}' '{url}'"
     output:
       output_file:
-        path: "{job_dir}/{step_id}/%(title)s.srt"
+        path: "{project_dir}/outputs/{step_id}/%(title)s.srt"
         file: true
       subtitle_file:
-        path: "{job_dir}/{step_id}/%(title)s.srt"
+        path: "{project_dir}/outputs/{step_id}/%(title)s.srt"
         file: true
     success_codes: [0, 1]
     timeout: 600
@@ -110,7 +110,7 @@ modes:
           pattern: ".*"
           source: stdout
       info_json:
-        path: "{job_dir}/{step_id}/info.json"
+        path: "{project_dir}/outputs/{step_id}/info.json"
         file: true
     success_codes: [0]
     timeout: 60
@@ -120,7 +120,7 @@ modes:
     command: "yt-dlp --proxy '{proxy}' -f '{format}' --yes-playlist -o '{out.output_file}' '{url}'"
     output:
       output_file:
-        path: "{job_dir}/{step_id}/%(playlist)s/%(title)s.mp4"
+        path: "{project_dir}/outputs/{step_id}/%(playlist)s/%(title)s.mp4"
         file: true
     success_codes: [0]
     timeout: 7200

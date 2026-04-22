@@ -227,11 +227,15 @@ class StepExecutor:
 
         # Generate output paths
         output_template = mode_config.get('output', {})
+        # Get project directory (current working directory)
+        project_dir = Path.cwd()
+        
         for out_name, out_config in output_template.items():
             if 'path' in out_config:
                 path_template = out_config['path']
                 # Replace placeholders
                 path = path_template.replace('{job_dir}', str(job_dir))
+                path = path.replace('{project_dir}', str(project_dir))
                 path = path.replace('{step_id}', step.step_id)
                 for key, value in params.items():
                     if isinstance(value, str):
@@ -289,6 +293,11 @@ class StepExecutor:
         # Get tool manifest for proxy configuration
         manifest = self.manifests.get(step.tool, {})
         
+        # Create output directory in project if using project_dir
+        project_dir = Path.cwd()
+        output_dir = project_dir / "outputs" / step.step_id
+        output_dir.mkdir(parents=True, exist_ok=True)
+
         # Inject proxy settings
         env_vars = os.environ.copy()
         proxy_env, proxy_params = self.proxy_manager.inject_for_step(manifest, env_vars)
@@ -390,15 +399,27 @@ class StepExecutor:
         """Parse command outputs"""
         output_params = {}
         output_files = []
+        project_dir = Path.cwd()
 
         for out_name, out_rules in output_config.items():
-            # File outputs — ищем любой файл в папке шага
-            if 'file' in out_rules or 'path' in out_rules:
+            # File outputs — сначала пробуем path из output_config
+            if 'path' in out_rules:
+                # Путь уже содержит полные переменные, но они ещё не раскрыты
+                # Ищем файл в project_dir/outputs/{step_id}
+                output_folder = project_dir / "outputs" / step.step_id
+                if output_folder.exists():
+                    all_files = list(output_folder.iterdir())
+                    if all_files:
+                        biggest = max(all_files, key=lambda f: f.stat().st_size)
+                        output_params[out_name] = str(biggest)
+                        output_files.append(str(biggest))
+
+            # Fallback: ищем в job_dir/{step_id} (старое поведение)
+            elif 'file' in out_rules:
                 step_dir = job_dir / step.step_id
                 if step_dir.exists():
                     all_files = list(step_dir.iterdir())
                     if all_files:
-                        # Берём самый большой файл — это и есть результат
                         biggest = max(all_files, key=lambda f: f.stat().st_size)
                         output_params[out_name] = str(biggest)
                         output_files.append(str(biggest))
