@@ -69,10 +69,10 @@ outputs:
 modes:
   download:
     description: Download video with audio
-    command: "yt-dlp --proxy '{proxy}' -f '{format}' --merge-output-format mp4 -o '{out.output_file}' '{url}'"
+    command: "yt-dlp --proxy '{proxy}' -o '{out.output_file}' '{url}'"
     output:
       output_file:
-        path: "{project_dir}/outputs/{step_id}/%(title)s.mp4"
+        path: "{project_dir}/outputs/{step_id}/%(title)s.%(ext)s"
         file: true
     success_codes: [0]
     timeout: 3600
