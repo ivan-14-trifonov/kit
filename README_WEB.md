@@ -31,17 +31,47 @@ python web_server.py --config config.yaml
 
 ### Деплой на Render
 
-**Start Command:**
-```bash
-python web_server.py
-```
+#### Вариант A: Python Service (без Docker)
 
 **Build Command:**
 ```bash
 pip install -r requirements.txt
 ```
 
+**Pre-Deploy Command:**
+```bash
+apt-get update && apt-get install -y yt-dlp ffmpeg
+```
+
+**Start Command:**
+```bash
+python web_server.py
+```
+
+#### Вариант B: Docker Service
+
+Используйте готовый `Dockerfile` в репозитории. В настройках Render выберите **Docker** как среду развертывания.
+
 Render автоматически установит переменную `PORT`, сервер запустится на нужном порту и будет доступен извне.
+
+---
+
+## Системные требования
+
+Для работы пайплайнов необходимы следующие инструменты:
+
+| Инструмент | Назначение | Установка (Linux) |
+|------------|------------|-------------------|
+| `yt-dlp` | Скачивание видео/аудио | `apt-get install yt-dlp` |
+| `ffmpeg` | Обработка медиа | `apt-get install ffmpeg` |
+| `openai-whisper` | Транскрибация | `pip install openai-whisper` |
+
+Проверить наличие инструментов:
+```bash
+yt-dlp --version
+ffmpeg -version
+whisper --version
+```
 
 ## Возможности
 

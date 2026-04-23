@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: kit-runner-web
+    env: python
+    region: frankfurt
+    plan: starter
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    preDeployCommand: apt-get update && apt-get install -y yt-dlp ffmpeg
+    startCommand: python web_server.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: PORT
+        fromPort: 7700
+    healthCheckPath: /
+    numInstances: 1
