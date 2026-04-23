@@ -249,6 +249,12 @@ class StepExecutor:
         cmd_str = re.sub(r'\s*--\w+\s+\'\'', ' ', cmd_str)  # Remove --param ''
         cmd_str = re.sub(r'\s*--\w+\s+""', ' ', cmd_str)  # Remove --param ""
         
+        # Remove cookies parameters with empty values
+        cmd_str = re.sub(r'\s*--cookies-from-browser\s+\'\'', ' ', cmd_str)
+        cmd_str = re.sub(r'\s*--cookies-from-browser\s+""', ' ', cmd_str)
+        cmd_str = re.sub(r'\s*--cookies\s+\'\'', ' ', cmd_str)
+        cmd_str = re.sub(r'\s*--cookies\s+""', ' ', cmd_str)
+        
         # Clean up multiple spaces
         cmd_str = re.sub(r'\s+', ' ', cmd_str).strip()
 

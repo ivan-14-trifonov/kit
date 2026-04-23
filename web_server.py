@@ -6,6 +6,7 @@ Provides web interface to Kit Runner functionality.
 import os
 import sys
 import json
+import time
 import threading
 from pathlib import Path
 from datetime import datetime
@@ -209,7 +210,15 @@ HTML_TEMPLATE = """
                     </div>
                     <div class="form-group">
                         <label for="input_params">Входные параметры (JSON, необязательно)</label>
-                        <textarea id="input_params" name="input_params" placeholder='{"url": "https://..."}'></textarea>
+                        <textarea id="input_params" name="input_params" placeholder='{"url": "https://...", "format": "best[height<=1080]"}'></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="cookies_file">Cookies файл (для YouTube, необязательно)</label>
+                        <input type="file" id="cookies_file" name="cookies_file" accept=".txt">
+                        <small style="color: #666; display: block; margin-top: 5px;">
+                            Формат: Netscape cookies.txt. Нужно для доступа к возрастным видео.
+                            <a href="https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies" target="_blank">Как получить?</a>
+                        </small>
                     </div>
                     <button type="submit" class="success">Запустить задачу</button>
                 </form>
@@ -368,7 +377,7 @@ HTML_TEMPLATE = """
             }
         }
         
-        // Run goal form
+        // Run goal form with file upload
         document.getElementById('run-goal-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             
@@ -385,12 +394,30 @@ HTML_TEMPLATE = """
                 return;
             }
             
+            const cookiesFile = document.getElementById('cookies_file').files[0];
+            
             try {
-                const resp = await fetch('/api/run', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ goal, input_data: inputData })
-                });
+                let resp;
+                if (cookiesFile) {
+                    // Upload with file
+                    const formData = new FormData();
+                    formData.append('goal', goal);
+                    formData.append('input_data', JSON.stringify(inputData));
+                    formData.append('cookies_file', cookiesFile);
+                    
+                    resp = await fetch('/api/run', {
+                        method: 'POST',
+                        body: formData
+                    });
+                } else {
+                    // Upload without file
+                    resp = await fetch('/api/run', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ goal, input_data: inputData })
+                    });
+                }
+                
                 const result = await resp.json();
                 
                 if (resp.ok) {
@@ -403,6 +430,7 @@ HTML_TEMPLATE = """
                     `;
                     document.getElementById('goal').value = '';
                     document.getElementById('input_params').value = '';
+                    document.getElementById('cookies_file').value = '';
                 } else {
                     document.getElementById('run-result').innerHTML = '<div class="error">Ошибка: ' + (result.error || 'Неизвестная ошибка') + '</div>';
                 }
@@ -445,14 +473,43 @@ def index():
 def run_goal():
     """Run a new goal"""
     try:
-        data = request.get_json()
-        goal = data.get('goal')
-        input_data = data.get('input_data', {})
+        # Handle both JSON and FormData (for file upload)
+        if request.content_type and 'multipart/form-data' in request.content_type:
+            goal = request.form.get('goal')
+            input_data_str = request.form.get('input_data', '{}')
+            input_data = json.loads(input_data_str) if input_data_str else {}
+            cookies_file = request.files.get('cookies_file')
+        else:
+            data = request.get_json()
+            goal = data.get('goal')
+            input_data = data.get('input_data', {})
+            cookies_file = None
         
         if not goal:
             return jsonify({'error': 'Goal is required'}), 400
         
         runner_instance = get_runner()
+        
+        # Handle cookies file upload
+        if cookies_file and cookies_file.filename:
+            # Save cookies file to job directory
+            import tempfile
+            from pathlib import Path
+            
+            # Get base storage directory
+            base_dir = Path(runner_instance.config.get('storage', {}).get('base_dir', '~/.kit')).expanduser()
+            cookies_dir = base_dir / 'cookies'
+            cookies_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Save with unique name
+            import uuid
+            cookies_filename = f"{uuid.uuid4().hex}_{cookies_file.filename}"
+            cookies_path = cookies_dir / cookies_filename
+            
+            cookies_file.save(str(cookies_path))
+            
+            # Add cookies_file path to input_data
+            input_data['cookies_file'] = str(cookies_path)
         
         # Run in background thread
         def run_async():
@@ -463,6 +520,9 @@ def run_goal():
         
         thread = threading.Thread(target=run_async, daemon=True)
         thread.start()
+        
+        # Wait a moment for job to be created
+        time.sleep(0.1)
         
         # Get the job (it's created immediately)
         jobs = runner_instance.list_jobs(limit=1)

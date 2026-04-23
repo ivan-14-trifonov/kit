@@ -42,6 +42,16 @@ inputs:
     default: "en"
     description: Language code for subtitles
 
+  cookies_from_browser:
+    type: string
+    required: false
+    description: Browser to extract cookies from (chrome, firefox, edge, safari)
+  
+  cookies_file:
+    type: string
+    required: false
+    description: Path to cookies file (Netscape format)
+
 # Output definitions
 outputs:
   output_file:
@@ -69,7 +79,7 @@ outputs:
 modes:
   download:
     description: Download video with audio
-    command: "yt-dlp -f '{format}' --merge-output-format mp4 -o '{out.output_file}' '{url}'"
+    command: "yt-dlp -f '{format}' --merge-output-format mp4 -o '{out.output_file}' '{url}'{cookies_browser}{cookies_file}"
     output:
       output_file:
         path: "{project_dir}/outputs/{step_id}/%(title)s.%(ext)s"
@@ -80,7 +90,7 @@ modes:
 
   audio_only:
     description: Extract audio only
-    command: "yt-dlp -x --audio-format mp3 -o '{out.output_file}' '{url}'"
+    command: "yt-dlp -x --audio-format mp3 -o '{out.output_file}' '{url}'{cookies_browser}{cookies_file}"
     output:
       output_file:
         path: "{project_dir}/outputs/{step_id}/%(title)s.mp3"
