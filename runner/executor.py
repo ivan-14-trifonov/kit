@@ -17,7 +17,6 @@ from enum import Enum
 
 from .job import StepCard, StepStatus, JobCard
 from .validator import OutputValidator, ValidationResult, ValidationStatus
-from .proxy import ProxyManager, ProxyConfig
 
 
 class ExecutionStatus(str, Enum):
@@ -65,25 +64,12 @@ class StepExecutor:
         max_delay: float = 30.0,
         timeout: int = 3600,
         manifests: Optional[Dict[str, Dict[str, Any]]] = None,
-        tool_config: Optional[Dict[str, Dict[str, Any]]] = None,
-        proxy_manager: Optional[ProxyManager] = None,
-        proxy_config: Optional[Dict[str, Any]] = None,
     ):
         self.max_retries = max_retries
         self.base_delay = base_delay
         self.max_delay = max_delay
         self.timeout = timeout
         self.manifests = manifests or {}
-        self.tool_config = tool_config or {}  # Tool-specific config (e.g., proxy)
-        
-        # Initialize proxy manager with config
-        if proxy_manager:
-            self.proxy_manager = proxy_manager
-        elif proxy_config:
-            self.proxy_manager = ProxyManager(proxy_config)
-        else:
-            self.proxy_manager = ProxyManager()  # Default: no proxy
-        
         self._cancelled = False
 
     def cancel(self):
@@ -198,15 +184,6 @@ class StepExecutor:
         # Build parameter map
         params = {**step.input_params}
 
-        # Add tool-specific config (e.g., proxy)
-        tool_cfg = self.tool_config.get(step.tool, {})
-        for key, value in tool_cfg.items():
-            # Skip proxy if it's disabled globally
-            if key == 'proxy' and not self.proxy_manager.is_enabled():
-                continue
-            if key not in params:  # Don't override step-specific params
-                params[key] = value
-
         # Add previous outputs for chaining
         for key, value in previous_outputs.items():
             if key not in params:
@@ -254,20 +231,9 @@ class StepExecutor:
                 out_name = key[6:]
                 cmd_str = cmd_str.replace(f'{{out.{out_name}}}', value)
 
-        # Handle disabled proxy: remove --proxy parameter from command
-        # This is needed when template includes --proxy '{proxy}' but proxy is disabled
-        import re
-        if not self.proxy_manager.is_enabled():
-            # Remove --proxy '' or --proxy "" or --proxy {proxy} (unsubstituted)
-            cmd_str = re.sub(r'\s*--proxy\s+\'\'', ' ', cmd_str)
-            cmd_str = re.sub(r'\s*--proxy\s+""', ' ', cmd_str)
-            cmd_str = re.sub(r'\s*--proxy\s+\{proxy\}', ' ', cmd_str, flags=re.IGNORECASE)
-            # Also handle case where {proxy} is in quotes
-            cmd_str = re.sub(r"\s*--proxy\s+'\{proxy\}'", ' ', cmd_str, flags=re.IGNORECASE)
-            cmd_str = re.sub(r'\s*--proxy\s+"\{proxy\}"', ' ', cmd_str, flags=re.IGNORECASE)
-        
         # Remove -f '' or -f "{format}" when format is empty/not specified
         # This allows default yt-dlp behavior when no format is provided
+        import re
         cmd_str = re.sub(r'\s+-f\s+\'\'', ' ', cmd_str)  # Remove -f ''
         cmd_str = re.sub(r'\s+-f\s+""', ' ', cmd_str)  # Remove -f ""
         cmd_str = re.sub(r'\s+-f\s+\{format\}', ' ', cmd_str, flags=re.IGNORECASE)  # Remove -f {format}
@@ -302,22 +268,10 @@ class StepExecutor:
         """Execute command and capture output"""
         start_time = time.time()
 
-        # Get tool manifest for proxy configuration
-        manifest = self.manifests.get(step.tool, {})
-        
         # Create output directory in project if using project_dir
         project_dir = Path.cwd()
         output_dir = project_dir / "outputs" / step.step_id
         output_dir.mkdir(parents=True, exist_ok=True)
-
-        # Inject proxy settings
-        env_vars = os.environ.copy()
-        proxy_env, proxy_params = self.proxy_manager.inject_for_step(manifest, env_vars)
-        
-        # Add proxy parameters to command if needed
-        if proxy_params:
-            # Insert proxy params after the main command
-            cmd = cmd[:1] + proxy_params + cmd[1:]
 
         try:
             process = subprocess.Popen(
@@ -326,7 +280,6 @@ class StepExecutor:
                 stderr=subprocess.PIPE,
                 cwd=str(job_dir),
                 text=True,
-                env=proxy_env,  # Use environment with proxy
             )
 
             try:

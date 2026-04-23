@@ -80,7 +80,7 @@ modes:
 
   audio_only:
     description: Extract audio only
-    command: "yt-dlp --proxy '{proxy}' -x --audio-format mp3 -o '{out.output_file}' '{url}'"
+    command: "yt-dlp -x --audio-format mp3 -o '{out.output_file}' '{url}'"
     output:
       output_file:
         path: "{project_dir}/outputs/{step_id}/%(title)s.mp3"
@@ -90,7 +90,7 @@ modes:
 
   subtitles:
     description: Download subtitles only
-    command: "yt-dlp --proxy '{proxy}' --write-subs --sub-lang '{lang}' --skip-download -o '{out.output_file}' '{url}'"
+    command: "yt-dlp --write-subs --sub-lang '{lang}' --skip-download -o '{out.output_file}' '{url}'"
     output:
       output_file:
         path: "{project_dir}/outputs/{step_id}/%(title)s.srt"
@@ -103,7 +103,7 @@ modes:
 
   probe:
     description: Probe video info without downloading
-    command: "yt-dlp --proxy '{proxy}' -J '{url}'"
+    command: "yt-dlp -J '{url}'"
     output:
       video_info:
         parse:
@@ -117,7 +117,7 @@ modes:
 
   playlist:
     description: Download entire playlist
-    command: "yt-dlp --proxy '{proxy}' -f '{format}' --yes-playlist -o '{out.output_file}' '{url}'"
+    command: "yt-dlp -f '{format}' --yes-playlist -o '{out.output_file}' '{url}'"
     output:
       output_file:
         path: "{project_dir}/outputs/{step_id}/%(playlist)s/%(title)s.mp4"
@@ -139,12 +139,6 @@ health_check:
       required: false
       warning_if_missing: true
       warning_message: "No JS runtime found - some YouTube formats may be unavailable"
-    - name: proxy_connectivity
-      description: Check SOCKS5 proxy connectivity
-      command: "python -c \"import socket; s=socket.socket(); s.settimeout(5); s.connect(('127.0.0.1',10808)); print('OK')\""
-      required: false
-      warning_if_missing: true
-      warning_message: "SOCKS5 proxy on 10808 not reachable"
 
 # Tool relationships
 relationships:
@@ -205,10 +199,6 @@ confidence:
       action: reduce
       factor: 0.8
       reason: "Some formats unavailable without deno/node"
-    - condition: "proxy_error"
-      action: reduce
-      factor: 0.5
-      reason: "Proxy connectivity issues"
 
 # Installation configuration
 install:
