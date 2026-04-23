@@ -5,11 +5,14 @@
 ## Быстрый запуск
 
 ```bash
-# Запуск сервера (по умолчанию на http://localhost:7700)
+# Запуск сервера (по умолчанию на http://0.0.0.0:7700)
 python web_server.py
 
 # Запуск на другом порту
 python web_server.py --port 8080
+
+# Запуск на конкретном хосте
+python web_server.py --host 127.0.0.1
 
 # Запуск с отладкой
 python web_server.py --debug
@@ -17,6 +20,28 @@ python web_server.py --debug
 # Запуск с указанием конфига
 python web_server.py --config config.yaml
 ```
+
+### Переменные окружения
+
+| Переменная | Описание | По умолчанию |
+|------------|----------|--------------|
+| `PORT` | Порт для сервера | `7700` |
+
+Сервер автоматически читает переменную `PORT` из окружения — это удобно для деплоя на Render, Heroku и других платформах.
+
+### Деплой на Render
+
+**Start Command:**
+```bash
+python web_server.py
+```
+
+**Build Command:**
+```bash
+pip install -r requirements.txt
+```
+
+Render автоматически установит переменную `PORT`, сервер запустится на нужном порту и будет доступен извне.
 
 ## Возможности
 

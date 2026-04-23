@@ -624,8 +624,8 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(description='Kit Runner Web Server')
-    parser.add_argument('--host', default='localhost', help='Host to bind')
-    parser.add_argument('--port', type=int, default=7700, help='Port to bind')
+    parser.add_argument('--host', default='0.0.0.0', help='Host to bind')
+    parser.add_argument('--port', type=int, default=int(os.environ.get('PORT', 7700)), help='Port to bind')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode')
     parser.add_argument('--config', '-c', help='Path to config file')
     
