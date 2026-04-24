@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "7700:7700"
+    environment:
+      - PORT=7700
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - kit-storage:/root/.kit
+      - ./manifests:/app/manifests:ro
+      - ./config.yaml:/app/config.yaml:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7700/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  kit-storage:
+    name: kit-runner-storage

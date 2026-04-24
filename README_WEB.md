@@ -29,7 +29,54 @@ python web_server.py --config config.yaml
 
 Сервер автоматически читает переменную `PORT` из окружения — это удобно для деплоя на Render, Heroku и других платформах.
 
-### Деплой на Render
+## Запуск в Docker
+
+### Локальная разработка
+
+```bash
+# Сборка и запуск
+docker-compose up --build
+
+# Запуск в фоновом режиме
+docker-compose up -d
+
+# Просмотр логов
+docker-compose logs -f
+
+# Остановка
+docker-compose down
+```
+
+Веб-интерфейс будет доступен на **http://localhost:7700**
+
+### Ручная сборка образа
+
+```bash
+# Сборка
+docker build -t kit-runner-web .
+
+# Запуск
+docker run -d \
+  -p 7700:7700 \
+  -v kit-storage:/root/.kit \
+  -e PORT=7700 \
+  --name kit-runner \
+  kit-runner-web
+
+# Логи
+docker logs -f kit-runner
+```
+
+### Переменные окружения Docker
+
+| Переменная | Описание | По умолчанию |
+|------------|----------|--------------|
+| `PORT` | Порт сервера | `7700` |
+| `PYTHONUNBUFFERED` | Буферизация вывода | `1` |
+
+---
+
+## Деплой на Render
 
 #### Вариант A: Python Service (без Docker)
 

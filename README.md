@@ -182,6 +182,9 @@ project/
 ```
 media_bot/
 ├── config.yaml              # Основная конфигурация
+├── Dockerfile               # Docker образ
+├── docker-compose.yml       # Docker Compose для разработки
+├── .dockerignore            # Исключения для Docker
 ├── runner/                  # Ядро Kit Runner
 │   ├── main.py              # CLI entry point
 │   ├── executor.py          # Исполнитель шагов с retry
@@ -197,6 +200,7 @@ media_bot/
 │   ├── ffmpeg.yaml
 │   └── winget.yaml
 ├── youtube_audio.py         # Пользовательские сценарии
+├── web_server.py            # Веб-сервер (Flask)
 ├── storage/                 # Хранилище задач и результатов
 └── ui/                      # Веб-интерфейс (в разработке)
 ```
